@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Adil's Dynamic QR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        body { font-family: 'Outfit', sans-serif; }
+        .hidden-section { display: none; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        .slide-up { animation: slideUp 0.4s ease-out forwards; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Custom Scrollbar for history */
+        .history-scroll::-webkit-scrollbar { width: 4px; }
+        .history-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .history-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden-section transition-all duration-300">
+        <div class="bg-slate-800 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 text-sm font-medium">
+            <i class="ph-fill ph-check-circle text-green-400 text-lg"></i>
+            <span id="toast-msg">Success!</span>
+        </div>
+    </div>
+
+    <main class="flex-grow container mx-auto px-4 py-6 max-w-md flex flex-col h-full">
+        
+        <header id="app-header" class="text-center mb-6 slide-up">
+            <div class="inline-block p-3 bg-white rounded-2xl shadow-sm mb-3">
+                <i class="ph-duotone ph-qr-code text-3xl text-indigo-600"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Adil's Dynamic QR</h1>
+            <p class="text-sm text-slate-500">Share smart, update anytime.</p>
+        </header>
+
+        <div id="tab-container" class="bg-white p-1 rounded-xl shadow-sm border border-slate-100 flex mb-6 slide-up" style="animation-delay: 0.1s;">
+            <button onclick="switchTab('create')" id="tab-create" class="flex-1 py-2 text-sm font-medium rounded-lg transition-all bg-indigo-50 text-indigo-700 shadow-sm">
+                New QR
+            </button>
+            <button onclick="switchTab('manage')" id="tab-manage" class="flex-1 py-2 text-sm font-medium rounded-lg transition-all text-slate-500 hover:bg-slate-50">
+                History & Edit
+            </button>
+        </div>
+
+        <div id="view-create" class="slide-up relative" style="animation-delay: 0.2s;">
+            <div class="glass-card p-1 rounded-2xl shadow-lg shadow-indigo-100/50">
+                <div class="bg-white rounded-xl p-5 border border-slate-100">
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 ml-1">QR Content</label>
+                    <div class="relative">
+                        <textarea id="create-input" rows="3" maxlength="500" class="w-full pl-4 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition resize-none text-base" placeholder="Type a link, message, or info..."></textarea>
+                        <div class="absolute bottom-3 right-3 text-xs text-slate-400 pointer-events-none">
+                            <i class="ph ph-pencil-simple"></i>
+                        </div>
+                    </div>
+                    
+                    <button onclick="createQR()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-medium py-3.5 rounded-xl transition-all shadow-md shadow-indigo-200 flex justify-center items-center gap-2 text-base">
+                        <i class="ph-bold ph-magic-wand"></i> Create Dynamic QR
+                    </button>
+                </div>
+            </div>
+
+            <div id="result-area" class="hidden-section mt-6 glass-card p-6 rounded-2xl shadow-xl shadow-indigo-100 border border-white text-center fade-in">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="text-left">
+                        <h3 class="font-bold text-slate-800 text-lg">Your QR is Ready</h3>
+                        <p class="text-xs text-slate-500">Scan to test it now</p>
+                    </div>
+                    <button onclick="closeResult()" class="text-slate-300 hover:text-slate-500"><i class="ph-bold ph-x"></i></button>
+                </div>
+
+                <div class="bg-white p-3 inline-block rounded-xl shadow-inner border border-slate-100 mb-5">
+                    <canvas id="qr-canvas"></canvas>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <button onclick="shareQR()" class="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-medium transition shadow-sm shadow-emerald-200">
+                        <i class="ph-bold ph-whatsapp-logo"></i> Share
+                    </button>
+                    <button onclick="downloadQR()" class="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 py-2.5 rounded-xl text-sm font-medium transition">
+                        <i class="ph-bold ph-download-simple"></i> Save
+                    </button>
+                </div>
+
+                <div class="bg-indigo-50/50 rounded-xl p-3 border border-indigo-100 text-left flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Secret ID (Auto-saved)</p>
+                        <p id="display-id" class="font-mono text-lg font-bold text-indigo-900 tracking-wider">---</p>
+                    </div>
+                    <button onclick="copyId()" class="bg-white p-2 rounded-lg text-indigo-600 shadow-sm hover:scale-105 transition">
+                        <i class="ph-bold ph-copy"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-manage" class="hidden-section slide-up" style="animation-delay: 0.1s;">
+            
+            <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex gap-2 mb-6">
+                <input id="existing-id-input" type="text" class="flex-1 pl-3 bg-transparent outline-none text-sm uppercase placeholder-slate-400 font-mono" placeholder="Paste an ID manually...">
+                <button onclick="goToEdit()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-black transition">
+                    Edit
+                </button>
+            </div>
+
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 ml-1">Your Recent QRs</h3>
+            <div id="history-list" class="space-y-3 pb-20 history-scroll">
+                <div class="text-center py-8 text-slate-400">
+                    <i class="ph-duotone ph-clock-counter-clockwise text-3xl mb-2"></i>
+                    <p class="text-sm">No history yet. Create one!</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="editor-view" class="hidden-section fade-in">
+            <div class="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 relative">
+                <button onclick="goHome()" class="absolute top-4 right-4 text-slate-300 hover:text-slate-600">
+                    <i class="ph-bold ph-x text-xl"></i>
+                </button>
+
+                <div class="mb-6">
+                    <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded">EDITING MODE</span>
+                    <h2 class="text-2xl font-bold text-slate-800 mt-2 font-mono" id="editing-id-display">...</h2>
+                </div>
+                
+                <div id="loading-edit" class="py-8 text-center text-slate-400">
+                    <i class="ph-bold ph-spinner animate-spin text-2xl"></i>
+                    <p class="text-sm mt-2">Fetching content...</p>
+                </div>
+                
+                <div id="edit-form" class="hidden-section">
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">New Content</label>
+                    <textarea id="update-input" rows="4" maxlength="500" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none transition resize-none text-base"></textarea>
+                    
+                    <button onclick="updateQR()" class="w-full mt-5 bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3.5 rounded-xl transition shadow-lg shadow-emerald-200 flex justify-center items-center gap-2">
+                        <i class="ph-bold ph-floppy-disk"></i> Save Changes
+                    </button>
+
+                    <button onclick="deleteQR()" class="w-full mt-3 text-red-400 hover:text-red-600 hover:bg-red-50 py-3 rounded-xl transition text-sm flex justify-center items-center gap-2">
+                        <i class="ph-bold ph-trash"></i> Delete Permanently
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="public-view" class="hidden-section text-center fade-in flex flex-col items-center justify-center min-h-[60vh]">
+            <div id="loader" class="animate-pulse space-y-4 w-full max-w-xs">
+                <div class="h-4 bg-slate-200 rounded w-3/4 mx-auto"></div>
+                <div class="h-4 bg-slate-200 rounded w-1/2 mx-auto"></div>
+            </div>
+            
+            <div id="content-display" class="hidden-section w-full">
+                <div class="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 inline-block max-w-full">
+                     <i class="ph-duotone ph-quotes text-4xl text-indigo-200 mb-4 block"></i>
+                     <h1 id="dynamic-text" class="text-2xl md:text-4xl font-bold text-slate-800 leading-tight break-words"></h1>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer id="app-footer" class="py-6 text-center text-xs text-slate-400">
+        <p>Made by <span class="font-semibold text-slate-500">Adil Firoz Khan</span></p>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc } 
+        from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCEpHKZdm2ITimvah-zLRH-r2NLTtKPnCc",
+            authDomain: "dyanmicqr.firebaseapp.com",
+            projectId: "dyanmicqr",
+            storageBucket: "dyanmicqr.firebasestorage.app",
+            messagingSenderId: "213853236812",
+            appId: "1:213853236812:web:98c5abb0dbcc2fe3d98ee9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- NAVIGATION & UI STATE ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewId = urlParams.get('view');
+        const editId = urlParams.get('edit');
+
+        // Initial Route Check
+        if (viewId) {
+            document.getElementById('app-header').style.display = 'none';
+            document.getElementById('tab-container').style.display = 'none';
+            document.getElementById('view-create').style.display = 'none';
+            document.getElementById('app-footer').classList.add('mt-auto'); // Push footer down
+            document.getElementById('public-view').classList.remove('hidden-section');
+            loadPublicContent(viewId);
+        } else if (editId) {
+            hideMainViews();
+            showEditor(editId);
+        } else {
+            loadHistoryUI(); // Load history on startup
+        }
+
+        // Global function to switch tabs
+        window.switchTab = function(tab) {
+            const createView = document.getElementById('view-create');
+            const manageView = document.getElementById('view-manage');
+            const tabCreate = document.getElementById('tab-create');
+            const tabManage = document.getElementById('tab-manage');
+
+            if(tab === 'create') {
+                createView.classList.remove('hidden-section');
+                manageView.classList.add('hidden-section');
+                tabCreate.className = "flex-1 py-2 text-sm font-medium rounded-lg transition-all bg-indigo-50 text-indigo-700 shadow-sm";
+                tabManage.className = "flex-1 py-2 text-sm font-medium rounded-lg transition-all text-slate-500 hover:bg-slate-50";
+            } else {
+                createView.classList.add('hidden-section');
+                manageView.classList.remove('hidden-section');
+                loadHistoryUI(); // Refresh list
+                tabManage.className = "flex-1 py-2 text-sm font-medium rounded-lg transition-all bg-indigo-50 text-indigo-700 shadow-sm";
+                tabCreate.className = "flex-1 py-2 text-sm font-medium rounded-lg transition-all text-slate-500 hover:bg-slate-50";
+            }
+        }
+
+        // Helper: Toast Notification
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            msgEl.innerText = message;
+            
+            if(isError) {
+                toast.querySelector('i').className = "ph-fill ph-warning-circle text-red-400 text-lg";
+            } else {
+                toast.querySelector('i').className = "ph-fill ph-check-circle text-green-400 text-lg";
+            }
+
+            toast.classList.remove('hidden-section');
+            toast.classList.remove('translate-y-[-100%]');
+            
+            setTimeout(() => {
+                toast.classList.add('hidden-section');
+            }, 3000);
+        }
+
+        // --- CORE LOGIC ---
+
+        // 1. CREATE
+        window.createQR = async function() {
+            const text = document.getElementById('create-input').value;
+            if(!text) return showToast("Please type something first!", true);
+
+            const id = Math.random().toString(36).substr(2, 5).toUpperCase();
+            
+            try {
+                await setDoc(doc(db, "qrcodes", id), {
+                    content: text,
+                    createdAt: new Date()
+                });
+
+                // Save to Local History
+                saveToLocalHistory(id, text);
+
+                // Generate QR
+                const baseUrl = window.location.href.split('?')[0];
+                const viewUrl = `${baseUrl}?view=${id}`;
+                
+                const qr = new QRious({
+                    element: document.getElementById('qr-canvas'),
+                    value: viewUrl,
+                    size: 200,
+                    level: 'H'
+                });
+
+                document.getElementById('result-area').classList.remove('hidden-section');
+                document.getElementById('display-id').innerText = id;
+                document.getElementById('create-input').value = ""; // Clear input
+                
+                showToast("QR Created Successfully!");
+
+            } catch (e) { console.error(e); showToast("Connection Error", true); }
+        }
+
+        // 2. LOCAL STORAGE HISTORY SYSTEM
+        function saveToLocalHistory(id, content) {
+            let history = JSON.parse(localStorage.getItem('qr_history') || "[]");
+            // Add new item to top
+            history.unshift({ id: id, content: content.substring(0, 30), date: new Date().toLocaleDateString() });
+            localStorage.setItem('qr_history', JSON.stringify(history));
+        }
+
+        function loadHistoryUI() {
+            let history = JSON.parse(localStorage.getItem('qr_history') || "[]");
+            const listEl = document.getElementById('history-list');
+            
+            if(history.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-8 text-slate-400 opacity-60"><i class="ph-duotone ph-clock-counter-clockwise text-3xl mb-2"></i><p class="text-sm">No history yet.</p></div>`;
+                return;
+            }
+
+            let html = '';
+            history.forEach(item => {
+                html += `
+                <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center hover:shadow-md transition">
+                    <div class="overflow-hidden">
+                        <p class="font-bold text-slate-700 font-mono text-lg">${item.id}</p>
+                        <p class="text-xs text-slate-400 truncate w-32">${item.content}...</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.location.href='?edit=${item.id}'" class="bg-indigo-50 text-indigo-600 p-2 rounded-lg hover:bg-indigo-100">
+                            <i class="ph-bold ph-pencil-simple"></i>
+                        </button>
+                         <button onclick="window.location.href='?view=${item.id}'" class="bg-slate-50 text-slate-600 p-2 rounded-lg hover:bg-slate-100">
+                            <i class="ph-bold ph-eye"></i>
+                        </button>
+                    </div>
+                </div>`;
+            });
+            listEl.innerHTML = html;
+        }
+
+        // 3. EDIT LOGIC
+        window.goToEdit = function() {
+            const inputId = document.getElementById('existing-id-input').value.trim().toUpperCase();
+            if(!inputId) return showToast("Enter an ID", true);
+            window.location.href = `?edit=${inputId}`;
+        }
+
+        window.goHome = function() {
+            window.location.href = "/";
+        }
+
+        async function showEditor(id) {
+            document.getElementById('editor-view').classList.remove('hidden-section');
+            document.getElementById('editing-id-display').innerText = id;
+
+            try {
+                const docRef = doc(db, "qrcodes", id);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    document.getElementById('loading-edit').classList.add('hidden-section');
+                    document.getElementById('edit-form').classList.remove('hidden-section');
+                    document.getElementById('update-input').value = docSnap.data().content;
+                } else {
+                    document.getElementById('loading-edit').innerHTML = "<p class='text-red-400'>ID not found</p>";
+                }
+            } catch (e) { console.error(e); }
+
+            window.updateQR = async function() {
+                const newText = document.getElementById('update-input').value;
+                try {
+                    await updateDoc(doc(db, "qrcodes", id), { content: newText });
+                    showToast("Updated successfully!");
+                } catch(e) { showToast("Error updating", true); }
+            }
+
+            window.deleteQR = async function() {
+                if(confirm("Permanently delete this?")) {
+                    try {
+                        await deleteDoc(doc(db, "qrcodes", id));
+                        // Remove from local history too
+                        let history = JSON.parse(localStorage.getItem('qr_history') || "[]");
+                        history = history.filter(item => item.id !== id);
+                        localStorage.setItem('qr_history', JSON.stringify(history));
+                        
+                        window.location.href = "/";
+                    } catch(e) { showToast("Error deleting", true); }
+                }
+            }
+        }
+
+        // 4. PUBLIC DISPLAY
+        async function loadPublicContent(id) {
+            try {
+                const docRef = doc(db, "qrcodes", id);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    document.getElementById('loader').classList.add('hidden-section');
+                    document.getElementById('content-display').classList.remove('hidden-section');
+                    document.getElementById('dynamic-text').innerText = docSnap.data().content;
+                } else {
+                    document.getElementById('loader').innerHTML = "<p class='text-slate-400'>QR Code has been deleted.</p>";
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // UTILS
+        window.closeResult = function() {
+            document.getElementById('result-area').classList.add('hidden-section');
+        }
+
+        window.copyId = function() {
+            const idText = document.getElementById('display-id').innerText;
+            navigator.clipboard.writeText(idText).then(() => showToast("ID Copied!"));
+        }
+
+        window.shareQR = function() {
+            const canvas = document.getElementById('qr-canvas');
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], "qr-code.png", { type: "image/png" });
+                if (navigator.share) {
+                    try { await navigator.share({ files: [file] }); } catch (err) {}
+                } else { showToast("Use Save button", true); }
+            });
+        }
+
+        window.downloadQR = function() {
+            const canvas = document.getElementById('qr-canvas');
+            const image = canvas.toDataURL("image/png");
+            const link = document.createElement('a');
+            link.href = image;
+            link.download = 'adil-dynamic-qr.png';
+            link.click();
+        }
+
+    </script>
+</body>
+</html>
